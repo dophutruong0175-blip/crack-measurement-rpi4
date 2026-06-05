@@ -190,21 +190,21 @@ tr:nth-child(even) td{background:#12122a}
     </div>
 
     <!-- Segments -->
-    {% if d.segments %}
+    {% set valid_segs = d.segments | selectattr("passes_width") | list %}
+    {% if valid_segs %}
     <div class="card">
-      <div class="card-label">Chi tiết từng đoạn ({{ d.segments|length }} đoạn)</div>
+      <div class="card-label">Chi tiết từng đoạn ({{ valid_segs|length }} đoạn hợp lệ)</div>
       <table>
         <tr>
           <th>#</th>
           <th style="text-align:right">Dài (mm)</th>
           <th style="text-align:right">Rộng (mm)</th>
         </tr>
-        {% for seg in d.segments %}
+        {% for seg in valid_segs %}
         <tr>
-          <td style="color:{% if seg.passes_width %}#eee{% else %}#555{% endif %}">{{ seg.index }}</td>
+          <td>{{ seg.index }}</td>
           <td style="text-align:right">{{ seg.length_mm }}</td>
-          <td style="text-align:right;color:{% if seg.passes_width %}#ffc800{% else %}#555{% endif %}">
-            {{ seg.max_width_mm }}</td>
+          <td style="text-align:right;color:#ffc800">{{ seg.max_width_mm }}</td>
         </tr>
         {% endfor %}
       </table>
@@ -435,13 +435,24 @@ def apply_rectification(frame: np.ndarray, config):
     rectified = frame
     if config.get("camera_matrix") is not None:
         h, w = rectified.shape[:2]
-        PAD = 80
-        padded = cv2.copyMakeBorder(rectified, PAD, PAD, PAD, PAD, cv2.BORDER_REFLECT)
+        # Tinh vung anh hop le sau undistort (khong bi meo goc)
+        _, roi = cv2.getOptimalNewCameraMatrix(
+            config["camera_matrix"], config["dist_coeffs"], (w, h), alpha=0
+        )
+        # Pad bang BORDER_REPLICATE de undistort khong tao vung den/gương o rìa
+        PAD = 100
+        padded = cv2.copyMakeBorder(rectified, PAD, PAD, PAD, PAD, cv2.BORDER_REPLICATE)
         cam_adj = config["camera_matrix"].copy()
         cam_adj[0, 2] += PAD
         cam_adj[1, 2] += PAD
         undistorted = cv2.undistort(padded, cam_adj, config["dist_coeffs"])
-        rectified = undistorted[PAD:PAD + h, PAD:PAD + w]
+        full = undistorted[PAD:PAD + h, PAD:PAD + w]
+        # Crop theo ROI de bo vung goc bi meo
+        x, y, rw, rh = roi
+        if rw > 0 and rh > 0:
+            rectified = full[y:y + rh, x:x + rw]
+        else:
+            rectified = full
     if config.get("homography") is not None:
         out_size = config.get("output_size") or (rectified.shape[1], rectified.shape[0])
         rectified = cv2.warpPerspective(rectified, config["homography"], out_size)
