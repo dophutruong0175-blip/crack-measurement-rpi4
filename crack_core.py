@@ -2005,8 +2005,8 @@ def measure_image_core(image: np.ndarray, gray: np.ndarray, calibration: SquareC
     area_mm2_valid = area_valid_px / (pixels_per_mm * pixels_per_mm)
     widest_segment = max(
         (segment for segment in segments if segment.passes_width),
-        key=lambda segment: segment.mean_width_mm,
-        default=max(segments, key=lambda segment: segment.mean_width_mm, default=None),
+        key=lambda segment: segment.max_width_mm,
+        default=max(segments, key=lambda segment: segment.max_width_mm, default=None),
     )
     widest_segment_max_mm = widest_segment.max_width_mm if widest_segment is not None else 0.0
 
